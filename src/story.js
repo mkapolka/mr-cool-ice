@@ -11,6 +11,7 @@ var $ = require('jquery');
 var _ = require('underscore');
 var LZString = require('lz-string');
 var Passage = require('./passage');
+var datalog = require("./datalog");
 
 var Story = function(dataEl) {
 	/* Set up basic properties. */
