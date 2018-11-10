@@ -35,4 +35,6 @@ spaces = " "*
 if = spaces "if" spaces
 word = !if s:[a-zA-Z0-9 ]+ { return s.join("").trim() }
 variable = '(' contents:[^()]* ')' { return contents.join("").trim() }
-constant = '"' contents:[^"]* '"' { return contents.join("").trim() }
+constant = constant_dq / constant_sq
+constant_dq = '"' contents:[^"]* '"' { return contents.join("").trim() }
+constant_sq = "'" contents:[^']* "'" { return contents.join("").trim() }
