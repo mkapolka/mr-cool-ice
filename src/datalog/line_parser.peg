@@ -1,0 +1,38 @@
+start = rule / claim
+
+rule = statement:statement "if" rule_list:statement+ [.\n]? { return { type: "rule", head: statement, body: rule_list } }
+claim = statement:statement {return {type: "claim", statement: statement } }
+
+statement = s:token_statement {
+    s.words = s.words.join(" ").trim()
+    return s
+}
+token_statement = word_statement / variable_statement / constant_statement
+inner_statement = word_statement / variable_statement / constant_statement / end_statement
+
+end_statement = [\n,]? { return {words: [], tokens: [] } }
+word_statement = word:word statement:inner_statement { 
+    statement.words.unshift(word)
+    return statement
+}
+variable_statement = variable:variable spaces statement:inner_statement { 
+    statement.tokens.unshift({
+        type: "variable",
+        name: variable
+    })
+    statement.words.unshift("%")
+    return statement
+}
+constant_statement = constant:constant spaces statement:inner_statement {
+    statement.tokens.unshift({
+        type: "const",
+        name: constant
+    })
+    statement.words.unshift("%")
+    return statement
+}
+spaces = " "*
+if = spaces "if" spaces
+word = !if s:[a-zA-Z0-9 ]+ { return s.join("").trim() }
+variable = '(' contents:[^()]* ')' { return contents.join("").trim() }
+constant = '"' contents:[^"]* '"' { return contents.join("").trim() }

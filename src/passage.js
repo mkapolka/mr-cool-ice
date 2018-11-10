@@ -9,6 +9,7 @@
 var _ = require('underscore');
 var marked = require('marked');
 var jQuery = require('jquery');
+var handlebars = require("handlebars");
 
 /**
  Our rendering engine. This is available externally as Passage.render(),
@@ -20,7 +21,7 @@ var jQuery = require('jquery');
 function render(source) {
 	/* See below for the definition of readyFunc. */
 
-	var result = _.template(source)({ s: window.story.state, $: readyFunc });
+    var result = handlebars.compile(source)({s: window.story.state, $: readyFunc });
 
 	/*
 	Transform class, ID, hidden, and link shorthands in HTML tags.
@@ -81,7 +82,10 @@ function render(source) {
 		}
 	});
 
-	marked.setOptions({ smartypants: true });
+    // Disable indented code tags
+    var renderer = new marked.Renderer();
+    renderer.code = function(t){return t};
+	marked.setOptions({ smartypants: true, renderer: renderer });
 	return marked(result);
 };
 

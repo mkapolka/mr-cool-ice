@@ -11,7 +11,9 @@ var $ = require('jquery');
 var _ = require('underscore');
 var LZString = require('lz-string');
 var Passage = require('./passage');
-var datalog = require("./datalog");
+var datalog = require("./datalog/datalog");
+
+window.datalog = datalog;
 
 var Story = function(dataEl) {
 	/* Set up basic properties. */
@@ -248,6 +250,12 @@ _.extend(Story.prototype, {
 		_.each(this.userScripts, function(script) {
 			eval(script);
 		}, this);
+
+        this.passages.filter((p) => p.tags.indexOf("logos") !== -1).map((p) => {
+            for (var line of p.source.split('\n')) {
+                datalog.assert(line.trim() + '\n');
+            }
+        })
 
 		/**
 		 Triggered when the story is finished loading, and right before

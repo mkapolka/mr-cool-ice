@@ -385,7 +385,6 @@ end
 
 local function make_clause(head, body)
    local clause = {head = head}
-   print(head, #body)
    for i=1,#body do
       clause[i] = body[i]
    end
@@ -443,7 +442,6 @@ end
 -- A clause is safe if every variable in its head is in its body.
 
 local function is_safe(clause)
-    print(clause.head, #clause.head)
    for i=1,#clause.head do
       if not clause.head[i]:is_safe(clause) then
 	 return false
