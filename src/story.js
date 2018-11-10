@@ -11,6 +11,7 @@ var $ = require('jquery');
 var _ = require('underscore');
 var LZString = require('lz-string');
 var Passage = require('./passage');
+var tau = require("./tau");
 
 var Story = function(dataEl) {
 	/* Set up basic properties. */
@@ -247,6 +248,12 @@ _.extend(Story.prototype, {
 		_.each(this.userScripts, function(script) {
 			eval(script);
 		}, this);
+
+        this.passages.filter((p) => p.tags.indexOf("tau") !== -1).map(
+            (p) => {
+                tau.session.consult(p.source);
+            } 
+        );
 
 		/**
 		 Triggered when the story is finished loading, and right before

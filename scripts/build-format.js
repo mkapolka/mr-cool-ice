@@ -10,7 +10,7 @@ var encoding = { encoding: 'utf8' };
 
 Promise.all([
 	exec('cssnano src/*.css'),
-	exec('browserify -g uglifyify src/index.js', { maxBuffer: Infinity })
+	exec('browserify src/index.js', { maxBuffer: Infinity })
 ]).then(function(results) {
 	var distPath = 'dist/' + pkg.name.toLowerCase() + '-' + pkg.version;
 	var htmlTemplate = ejs.compile(fs.readFileSync('src/index.ejs', encoding));
