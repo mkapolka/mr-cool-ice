@@ -294,6 +294,24 @@ _.extend(Story.prototype, {
 		}
 	},
 
+    ctxPassage: function(idOrName) {
+		if (_.isNumber(idOrName)) {
+			return {passage: this.passages[idOrName], ctx: {}};
+		} else if (_.isString(idOrName)) {
+            for (var i = 0; i < this.passages.length; i++) {
+                var passage = this.passages[i];
+                if (!passage) continue;
+                var match = idOrName.match(`^${this.passages[i].name.trim()}$`);
+                if (match) {
+                    return {
+                        passage: passage,
+                        ctx: match.groups || {}
+                    }
+                }
+            }
+        }
+    },
+
 	/**
 	 Displays a passage on the page, replacing the current one. If there is no
 	 passage by the name or ID passed, an exception is raised.
@@ -308,7 +326,10 @@ _.extend(Story.prototype, {
 	**/
 
 	show: function(idOrName, noHistory) {
-		var passage = this.passage(idOrName);
+        var ctxPassage = this.ctxPassage(idOrName);
+        var passage = ctxPassage.passage;
+
+		//var passage = this.passage(idOrName);
 
 		if (!passage) {
 			throw new Error(
@@ -377,7 +398,7 @@ _.extend(Story.prototype, {
 
 		window.passage = passage;
 		this.atCheckpoint = false;
-		this.$passageEl.html(passage.render());
+		this.$passageEl.html(passage.render(ctxPassage.ctx));
 
 		/**
 		 Triggered after a passage has been shown onscreen, and is now
@@ -399,13 +420,14 @@ _.extend(Story.prototype, {
 	**/
 
 	render: function(idOrName) {
-		var passage = this.passage(idOrName);
+		//var passage = this.passage(idOrName);
+        var ctxPassage = this.ctxPassage(idOrName);
 
-		if (!passage) {
+		if (!ctxPassage.passage) {
 			throw new Error('There is no passage with the ID or name ' + idOrName);
 		}
 
-		return passage.render();
+		return ctxPassage.passage.render(ctxPassage.ctx);
 	},
 
 	/**

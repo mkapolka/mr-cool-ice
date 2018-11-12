@@ -18,10 +18,14 @@ var handlebars = require("handlebars");
  @return HTML source
 **/
 
-function render(source) {
+function render(source, context) {
 	/* See below for the definition of readyFunc. */
 
-    var result = handlebars.compile(source)({s: window.story.state, $: readyFunc });
+    context.s = window.story.state;
+    context.$ = readyFunc;
+    var result = handlebars.compile(source)(context);
+
+    //var result = _.template(source)({ s: window.story.state, $: readyFunc });
 
 	/*
 	Transform class, ID, hidden, and link shorthands in HTML tags.
@@ -227,8 +231,8 @@ _.extend(Passage.prototype, {
 	 @return HTML source
 	**/
 
-	render: function() {
-		return render(_.unescape(this.source));
+	render: function(context) {
+		return render(_.unescape(this.source), context);
 	}
 });
 
