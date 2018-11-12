@@ -1,9 +1,23 @@
 start = rule / claim
 
-rule = statement:statement "if" rule_list:statement+ [.\n]? { return { type: "rule", head: statement, body: rule_list } }
-claim = statement:statement {return {type: "claim", statement: statement } }
+rule = statement:statement "if" rule_list:statement+ [.\n]* { return { type: "rule", head: statement, body: rule_list } }
+claim = statement:statement [.\n]* {return {type: "claim", statement: statement } }
 
-statement = s:token_statement {
+statement = meta_statement / simple_statement
+meta_statement = command:word ":" statement:simple_statement {
+    statement.tokens.unshift({
+        type: "const",
+        name: statement.words
+    });
+    statement.tokens.unshift({
+        type: "const",
+        name: command
+    });
+    statement.words = "meta";
+    return statement;
+}
+
+simple_statement = s:token_statement {
     s.words = s.words.join(" ").trim()
     return s
 }
