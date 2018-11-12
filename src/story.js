@@ -206,9 +206,11 @@ _.extend(Story.prototype, {
 		/* Set up passage link handler. */
 
 		this.$el.on('click', 'a[data-passage]', function (e) {
-			this.show(_.unescape(
-				$(e.target).closest('[data-passage]').data('passage')
-			));
+            var linkName = _.unescape(
+                $(e.target).closest('[data-passage]').data('passage')
+            )
+            datalog.perform(linkName);
+			this.show(linkName);
 		}.bind(this));
 
 		/* Set up hash change handler for save/restore. */
@@ -253,7 +255,9 @@ _.extend(Story.prototype, {
 
         this.passages.filter((p) => p.tags.indexOf("logos") !== -1).map((p) => {
             for (var line of p.source.split('\n')) {
-                datalog.assert(line.trim() + '\n');
+                if (line.trim() !== "") {
+                    datalog.assert(line.trim() + '\n');
+                }
             }
         })
 
@@ -301,7 +305,9 @@ _.extend(Story.prototype, {
             for (var i = 0; i < this.passages.length; i++) {
                 var passage = this.passages[i];
                 if (!passage) continue;
-                var match = idOrName.match(`^${this.passages[i].name.trim()}$`);
+                // Translate the regex to match values
+                var regex = passage.name.replace(/\((.*)\)/, `"(?<$1>[^"]*)"`);
+                var match = idOrName.match(`^${regex}$`);
                 if (match) {
                     return {
                         passage: passage,

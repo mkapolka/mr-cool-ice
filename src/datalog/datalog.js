@@ -4,6 +4,7 @@ var $ = require("jquery");
 var fengari = require("fengari-web");
 var fs = require("fs");
 var handlebars = require("handlebars");
+var story = require("../story");
 
 var line_parser = require("./line_parser");
 var datalog_lua = fs.readFileSync(__dirname + "/datalog.lua", 'utf8');
@@ -72,7 +73,6 @@ function _statement_to_literal(statement) {
 
 function _string_to_clause(text) {
     var parsed = line_parser.parse(text);
-    console.log(parsed);
     if (parsed.type === "claim") {
         var head = _statement_to_literal(parsed.statement);
         return make_clause(head, []);
@@ -123,19 +123,46 @@ function public_ask(text) {
     return format_answers(answers, varNames);
 }
 
-function collect_meta(text) {
+function collect_meta() {
     var meta = make_literal("meta", [undefined].concat([make_var("command"), make_var("pred"), make_var("v")]))
     var varNames = ["command", "pred", "v"]
     var answers = ask(meta)
     return format_answers(answers, varNames);
 }
 
+// TODO: This isn't going to allow `display`, since there's no method to
+// append / prepend text to the passage from here. Perform-ing might need
+// to live somewhere else
+function public_perform(action_text) {
+    var action_clause = _string_to_clause(action_text);
+    assert(action_clause);
+    var sideEffects = collect_meta()
+    for (let sideEffect of sideEffects) {
+        if (sideEffect.command === "assert" || sideEffect.command === "retract") {
+            var terms = [undefined].concat([make_const(sideEffect.v)]);
+            var literal = make_literal(sideEffect.pred, terms);
+            var clause = make_clause(literal, []);
+            if (sideEffect.command === "assert") {
+                assert(clause);
+            } else {
+                retract(clause);
+            }
+        }
+    }
+    retract(action_clause);
+}
+
+function _HBFormatPassage(passageName, hash) {
+    for (var key in hash) {
+        passageName = passageName.replace(`\(${key}\)`, `"${hash[key]}"`);
+    }
+    return passageName;
+}
+
 handlebars.registerHelper("q", function(query, options) {
     var output = "";
     // Format provided variables
-    for (var key in options.hash) {
-        query = query.replace(`\(${key}\)`, `"${options.hash[key]}"`);
-    }
+    query = _HBFormatPassage(query, options.hash);
     for (let answer of public_ask(query)) {
         output += options.fn(answer);
     }
@@ -150,9 +177,17 @@ handlebars.registerHelper("retract", function(query, options) {
     public_retract(query);
 })
 
+// TODO: This helper should live in story.js/passage.js/the level above
+// - no reason to import ../story.js from this module
+handlebars.registerHelper("display", function(query, options) {
+    var passage = _HBFormatPassage(query, options.hash);
+    return story.render(passage);
+});
+
 
 module.exports = {
     assert: public_assert,
     ask: public_ask,
-    collect_meta: collect_meta
+    collect_meta: collect_meta,
+    perform: public_perform
 }
