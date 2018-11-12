@@ -72,6 +72,7 @@ function _statement_to_literal(statement) {
 
 function _string_to_clause(text) {
     var parsed = line_parser.parse(text);
+    console.log(parsed);
     if (parsed.type === "claim") {
         var head = _statement_to_literal(parsed.statement);
         return make_clause(head, []);
@@ -95,11 +96,7 @@ function public_retract(text) {
     retract(clause);
 }
 
-function public_ask(text) {
-    var parsed = line_parser.parse(text);
-    var varNames = parsed.statement.tokens.map((t) => t.type === "variable" ? t.name : undefined);
-    var literal = _statement_to_literal(parsed.statement);
-    var answers = ask(literal);
+function format_answers(answers, varNames) {
     var output = []
     if (!answers) { return [] }
     for (let k of answers) {
@@ -118,8 +115,27 @@ function public_ask(text) {
     return output;
 }
 
+function public_ask(text) {
+    var parsed = line_parser.parse(text);
+    var varNames = parsed.statement.tokens.map((t) => t.type === "variable" ? t.name : undefined);
+    var literal = _statement_to_literal(parsed.statement);
+    var answers = ask(literal);
+    return format_answers(answers, varNames);
+}
+
+function collect_meta(text) {
+    var meta = make_literal("meta", [undefined].concat([make_var("command"), make_var("pred"), make_var("v")]))
+    var varNames = ["command", "pred", "v"]
+    var answers = ask(meta)
+    return format_answers(answers, varNames);
+}
+
 handlebars.registerHelper("q", function(query, options) {
     var output = "";
+    // Format provided variables
+    for (var key in options.hash) {
+        query = query.replace(`\(${key}\)`, `"${options.hash[key]}"`);
+    }
     for (let answer of public_ask(query)) {
         output += options.fn(answer);
     }
@@ -135,9 +151,8 @@ handlebars.registerHelper("retract", function(query, options) {
 })
 
 
-
-
 module.exports = {
     assert: public_assert,
-    ask: public_ask
+    ask: public_ask,
+    collect_meta: collect_meta
 }
