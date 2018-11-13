@@ -1,4 +1,4 @@
-start = rule / claim
+start = comment / rule / claim
 
 rule = statement:statement "if" rule_list:statement+ [.\n]* { return { type: "rule", head: statement, body: rule_list } }
 claim = statement:statement [.\n]* {return {type: "claim", statement: statement } }

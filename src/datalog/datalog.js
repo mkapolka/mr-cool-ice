@@ -3,7 +3,7 @@
 var $ = require("jquery");
 var fengari = require("fengari-web");
 var fs = require("fs");
-var handlebars = require("handlebars");
+var Handlebars = require("handlebars");
 var story = require("../story");
 
 var line_parser = require("./line_parser");
@@ -124,10 +124,32 @@ function public_ask(text) {
 }
 
 function collect_meta() {
-    var meta = make_literal("meta", [undefined].concat([make_var("command"), make_var("pred"), make_var("v")]))
-    var varNames = ["command", "pred", "v"]
-    var answers = ask(meta)
-    return format_answers(answers, varNames);
+    var numberedVarNames = ["0", "1", "2", "3", "4", "5", "6", "7", "8"];
+    function _query_meta(n) {
+        let shortNameList = numberedVarNames.slice(0, n).map(make_var);
+        var meta = make_literal("meta", [undefined, make_var("command"), make_var("predicate")].concat(shortNameList));
+        var varNames = ["command", "predicate"].concat(numberedVarNames);
+        var answers = ask(meta);
+        return format_answers(answers, varNames);
+    }
+    var answers = [];
+    for (var i = 0; i < 9; i++) {
+        answers = answers.concat(_query_meta(i));
+    }
+    return answers;
+}
+
+var SIDE_EFFECTS = {
+    assert: function(predicate, ...args) {
+        var literal = make_literal(predicate, [undefined].concat(args.map(make_const)));
+        var clause = make_clause(literal, []);
+        assert(clause);
+    },
+    retract: function(predicate, ...args) {
+        var literal = make_literal(predicate, [undefined].concat(args.map(make_const)));
+        var clause = make_clause(literal, []);
+        retract(clause);
+    }
 }
 
 // TODO: This isn't going to allow `display`, since there's no method to
@@ -138,16 +160,18 @@ function public_perform(action_text) {
     assert(action_clause);
     var sideEffects = collect_meta()
     for (let sideEffect of sideEffects) {
-        if (sideEffect.command === "assert" || sideEffect.command === "retract") {
-            var terms = [undefined].concat([make_const(sideEffect.v)]);
-            var literal = make_literal(sideEffect.pred, terms);
-            var clause = make_clause(literal, []);
-            if (sideEffect.command === "assert") {
-                assert(clause);
-            } else {
-                retract(clause);
-            }
+        var args = [];
+        var i = 0;
+        while (sideEffect[i] !== undefined) {
+            args.push(sideEffect[i]);
+            i++;
         }
+        if (SIDE_EFFECTS[sideEffect.command] !== undefined) {
+            SIDE_EFFECTS[sideEffect.command].apply(null, [sideEffect.predicate].concat(args));
+        } else {
+            throw `${sideEffect.command} is not a meta command.`
+        }
+        
     }
     retract(action_clause);
 }
@@ -159,29 +183,33 @@ function _HBFormatPassage(passageName, hash) {
     return passageName;
 }
 
-handlebars.registerHelper("q", function(query, options) {
+Handlebars.registerHelper("q", function(query, options) {
     var output = "";
     // Format provided variables
     query = _HBFormatPassage(query, options.hash);
-    for (let answer of public_ask(query)) {
+    let answers = public_ask(query);
+    if (answers.length === 0) {
+        return options.inverse();
+    }
+    for (let answer of answers) {
         output += options.fn(answer);
     }
     return output;
 })
 
-handlebars.registerHelper("assert", function(query, options) {
+Handlebars.registerHelper("assert", function(query, options) {
     public_assert(query);
 })
 
-handlebars.registerHelper("retract", function(query, options) {
+Handlebars.registerHelper("retract", function(query, options) {
     public_retract(query);
 })
 
 // TODO: This helper should live in story.js/passage.js/the level above
 // - no reason to import ../story.js from this module
-handlebars.registerHelper("display", function(query, options) {
+Handlebars.registerHelper("display", function(query, options) {
     var passage = _HBFormatPassage(query, options.hash);
-    return story.render(passage);
+    return new Handlebars.SafeString(window.story.render(passage));
 });
 
 

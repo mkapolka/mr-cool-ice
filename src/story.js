@@ -255,7 +255,8 @@ _.extend(Story.prototype, {
 
         this.passages.filter((p) => p.tags.indexOf("logos") !== -1).map((p) => {
             for (var line of p.source.split('\n')) {
-                if (line.trim() !== "") {
+                line = line.trim();
+                if (line !== "" && !line.startsWith("%")) {
                     datalog.assert(line.trim() + '\n');
                 }
             }
