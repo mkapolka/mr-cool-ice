@@ -1,7 +1,8 @@
-start = rule / claim
+start = rule / multistatement / claim
 
 rule = statement:statement "if" rule_list:statement+ [.\n]* { return { type: "rule", head: statement, body: rule_list } }
 claim = statement:statement [.\n]* {return {type: "claim", statement: statement } }
+multistatement = statement:statement statements:statement+ [.\n]* { return { type: "multistatement", statements:statements.concat(statement) } }
 
 statement = meta_statement / simple_statement
 meta_statement = command:word ":" statement:simple_statement {

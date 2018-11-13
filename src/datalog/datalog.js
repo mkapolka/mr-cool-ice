@@ -71,29 +71,36 @@ function _statement_to_literal(statement) {
     return make_literal(statement.words, [undefined].concat(terms));
 }
 
-function _string_to_clause(text) {
+function _string_to_clauses(text) {
     var parsed = line_parser.parse(text);
     if (parsed.type === "claim") {
         var head = _statement_to_literal(parsed.statement);
-        return make_clause(head, []);
+        return [make_clause(head, [])];
     }
 
     if (parsed.type === "rule") {
         var head = _statement_to_literal(parsed.head);
         var body = parsed.body.map(_statement_to_literal);
-        var clause = make_clause(head, [undefined].concat(body));
-        return assert(clause);
+        return [make_clause(head, [undefined].concat(body))];
+    }
+
+    if (parsed.type === "multistatement") {
+        return parsed.statements.map(_statement_to_literal).map((l) => make_clause(l, []));
     }
 }
 
 function public_assert(text) {
-    var clause = _string_to_clause(text);
-    assert(clause);
+    var clauses = _string_to_clauses(text);
+    for (let clause of clauses) {
+        assert(clause);
+    }
 }
 
 function public_retract(text) {
-    var clause = _string_to_clause(text);
-    retract(clause);
+    var clauses = _string_to_clauses(text);
+    for (let clause of clauses) {
+        assert(clauses);
+    }
 }
 
 function format_answers(answers, varNames) {
@@ -117,9 +124,27 @@ function format_answers(answers, varNames) {
 
 function public_ask(text) {
     var parsed = line_parser.parse(text);
-    var varNames = parsed.statement.tokens.map((t) => t.type === "variable" ? t.name : undefined);
-    var literal = _statement_to_literal(parsed.statement);
-    var answers = ask(literal);
+    var varNames = [];
+    var answers = {}
+    if (parsed.type === "multistatement") {
+        // rewrite to be one rule
+        varNames = parsed.statements.map(
+            (statement) => statement.tokens.filter(
+                (t) => t.type === "variable"
+            ).map((v) => v.name)
+        ).reduce((p, next) => p.concat(next), []);
+        varNames = _.uniq(varNames);
+        var head = make_literal("public_ask", [null].concat(varNames.map(make_var)))
+        var body = [null].concat(parsed.statements.map(_statement_to_literal))
+        var clause = make_clause(head, body)
+        assert(clause)
+        answers = ask(head)
+        retract(clause)
+    } else {
+        varNames = parsed.statement.tokens.map((t) => t.type === "variable" ? t.name : undefined);
+        var literal = _statement_to_literal(parsed.statement);
+        answers = ask(literal);
+    }
     return format_answers(answers, varNames);
 }
 
@@ -156,8 +181,10 @@ var SIDE_EFFECTS = {
 // append / prepend text to the passage from here. Perform-ing might need
 // to live somewhere else
 function public_perform(action_text) {
-    var action_clause = _string_to_clause(action_text);
-    assert(action_clause);
+    var action_clauses = _string_to_clauses(action_text);
+    for (let clause of action_clauses) {
+        assert(clause);
+    }
     var sideEffects = collect_meta()
     for (let sideEffect of sideEffects) {
         var args = [];
@@ -173,7 +200,9 @@ function public_perform(action_text) {
         }
         
     }
-    retract(action_clause);
+    for (let clause of action_clauses) {
+        retract(clause);
+    }
 }
 
 function _HBFormatPassage(passageName, hash) {
