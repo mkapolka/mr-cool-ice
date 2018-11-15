@@ -937,6 +937,15 @@ end
 
 -- The Lua API
 
+-- Translate input JS list to lua list
+local function make_list(list)
+    local output = {}
+    for i=0,#list-1 do
+        output[i+1] = list[i]
+    end
+    return output
+end
+
 datalog = {
    make_var = make_var,
    make_const = make_const,
@@ -955,4 +964,5 @@ datalog = {
    revert = revert,
    ask = ask,
    add_iter_prim = add_iter_prim,
+   make_list = make_list
 }

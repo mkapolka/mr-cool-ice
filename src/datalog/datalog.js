@@ -57,6 +57,7 @@ var assert = _wrap_lua_f(lua_datalog.get("assert"))
 var retract = _wrap_lua_f(lua_datalog.get("retract"))
 // literal : literal -> [answers]
 var ask = _wrap_lua_f(lua_datalog.get("ask"))
+var make_list = _wrap_lua_f(lua_datalog.get("make_list"))
 
 function _statement_to_literal(statement) {
     var terms = []
@@ -68,7 +69,7 @@ function _statement_to_literal(statement) {
             terms.push(make_var(token.name))
         }
     }
-    return make_literal(statement.words, [undefined].concat(terms));
+    return make_literal(statement.words, make_list(terms));
 }
 
 function _string_to_clauses(text) {
@@ -80,8 +81,8 @@ function _string_to_clauses(text) {
 
     if (parsed.type === "rule") {
         var head = _statement_to_literal(parsed.head);
-        var body = parsed.body.map(_statement_to_literal);
-        return [make_clause(head, [undefined].concat(body))];
+        var body = make_list(parsed.body.map(_statement_to_literal));
+        return [make_clause(head, body)];
     }
 
     if (parsed.type === "multistatement") {
@@ -109,6 +110,7 @@ function format_answers(answers, varNames) {
     for (let k of answers) {
         if (k[0] !== "name" && k[0] !== "arity") {
             var result = {};
+            window.fuppy = k[1]
             for (let j of k[1]) {
                 var key = varNames[j[0] - 1];
                 if (key) {
@@ -134,8 +136,8 @@ function public_ask(text) {
             ).map((v) => v.name)
         ).reduce((p, next) => p.concat(next), []);
         varNames = _.uniq(varNames);
-        var head = make_literal("public_ask", [null].concat(varNames.map(make_var)))
-        var body = [null].concat(parsed.statements.map(_statement_to_literal))
+        var head = make_literal("public_ask", make_list(varNames.map(make_var)))
+        var body = make_list(parsed.statements.map(_statement_to_literal));
         var clause = make_clause(head, body)
         assert(clause)
         answers = ask(head)
@@ -152,7 +154,7 @@ function collect_meta() {
     var numberedVarNames = ["0", "1", "2", "3", "4", "5", "6", "7", "8"];
     function _query_meta(n) {
         let shortNameList = numberedVarNames.slice(0, n).map(make_var);
-        var meta = make_literal("meta", [undefined, make_var("command"), make_var("predicate")].concat(shortNameList));
+        var meta = make_literal("meta", make_list([make_var("command"), make_var("predicate")].concat(shortNameList)));
         var varNames = ["command", "predicate"].concat(numberedVarNames);
         var answers = ask(meta);
         return format_answers(answers, varNames);
@@ -166,12 +168,12 @@ function collect_meta() {
 
 var SIDE_EFFECTS = {
     assert: function(predicate, ...args) {
-        var literal = make_literal(predicate, [undefined].concat(args.map(make_const)));
+        var literal = make_literal(predicate, make_list(args.map(make_const)));
         var clause = make_clause(literal, []);
         assert(clause);
     },
     retract: function(predicate, ...args) {
-        var literal = make_literal(predicate, [undefined].concat(args.map(make_const)));
+        var literal = make_literal(predicate, make_list(args.map(make_const)));
         var clause = make_clause(literal, []);
         retract(clause);
     }
@@ -220,7 +222,8 @@ Handlebars.registerHelper("q", function(query, options) {
     if (answers.length === 0) {
         return options.inverse();
     }
-    for (let answer of answers) {
+    let limit = options.hash.limit || 10000;
+    for (let answer of answers.slice(0, limit)) {
         output += options.fn(answer);
     }
     return output;
@@ -229,6 +232,11 @@ Handlebars.registerHelper("q", function(query, options) {
 Handlebars.registerHelper("assert", function(query, options) {
     public_assert(query);
 })
+
+Handlebars.registerHelper("perform", function(query, options) {
+    public_perform(_HBFormatPassage(query, options.hash));
+})
+
 
 Handlebars.registerHelper("retract", function(query, options) {
     public_retract(query);

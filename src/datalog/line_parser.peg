@@ -1,6 +1,6 @@
 start = rule / multistatement / claim
 
-rule = statement:statement "if" rule_list:statement+ [.\n]* { return { type: "rule", head: statement, body: rule_list } }
+rule = statement:statement if rule_list:statement+ [.\n]* { return { type: "rule", head: statement, body: rule_list } }
 claim = statement:statement [.\n]* {return {type: "claim", statement: statement } }
 multistatement = statement:statement statements:statement+ [.\n]* { return { type: "multistatement", statements:statements.concat(statement) } }
 
@@ -48,8 +48,8 @@ constant_statement = constant:constant spaces statement:inner_statement {
 }
 spaces = " "*
 if = spaces "if" spaces
-word = !if s:[a-zA-Z0-9 ]+ { return s.join("").trim() }
-variable = '(' contents:[^()]* ')' { return contents.join("").trim() }
+word = spaces !if s:[a-zA-Z0-9]+ { return s.join("").trim() }
+variable = spaces '(' contents:[^()]* ')' { return contents.join("").trim() }
 constant = constant_dq / constant_sq
-constant_dq = '"' contents:[^"]* '"' { return contents.join("").trim() }
-constant_sq = "'" contents:[^']* "'" { return contents.join("").trim() }
+constant_dq = spaces '"' contents:[^"]* '"' { return contents.join("").trim() }
+constant_sq = spaces "'" contents:[^']* "'" { return contents.join("").trim() }
