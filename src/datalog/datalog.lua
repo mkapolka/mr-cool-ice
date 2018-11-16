@@ -49,8 +49,8 @@ local function mk_intern(maker)
       id = tostring(id)
       local value = tbl[id]
       if not value then
-	 value = maker(id)
-	 tbl[id] = value
+         value = maker(id)
+         tbl[id] = value
       end
       return value
    end
@@ -76,7 +76,7 @@ local fresh_var_state = 0
 local function mk_fresh_var()
    local id = tostring(fresh_var_state)
    fresh_var_state = fresh_var_state + 1 -- To ensure freshness,
-   return mk_var(id);		-- don't intern this variable.
+   return mk_var(id);                -- don't intern this variable.
 end
 
 function Var:is_const()
@@ -118,14 +118,14 @@ local function make_pred(pred_name, arity)
    return intern_pred(mk_pred_id(pred_name, arity))
 end
 
-local function last_slash(s)	-- Returns the location of the last slash
-   local i = 0			-- in a string or 0.
+local function last_slash(s)        -- Returns the location of the last slash
+   local i = 0                        -- in a string or 0.
    while true do
       local j = string.find(s, "/", i + 1)
       if not j then
-	 return i
+         return i
       else
-	 i = j
+         i = j
       end
    end
 end
@@ -179,7 +179,7 @@ local function get_id(literal)
    if not id then
       id = add_size(literal.pred.id)
       for i=1,#literal do
-	 id = id .. add_size(literal[i]:get_id())
+         id = id .. add_size(literal[i]:get_id())
       end
       literal.id = id
    end
@@ -208,7 +208,7 @@ local function get_tag(literal)
       local env = {}
       tag = add_size(literal.pred.id)
       for i=1,#literal do
-	 tag = tag .. add_size(literal[i]:get_tag(i, env))
+         tag = tag .. add_size(literal[i]:get_tag(i, env))
       end
       literal.tag = tag
    end
@@ -233,7 +233,7 @@ end
 -- An environment is a map from variables to terms.
 
 local function subst(literal, env)
-   if not next(env) then	-- Found an empty map.
+   if not next(env) then        -- Found an empty map.
       return literal
    end
    local arity = #literal
@@ -294,14 +294,14 @@ local function unify(literal, other)
    else
       local env = {}
       for i=1,#literal do
-	 local literal_i = literal[i]:chase(env)
-	 local other_i = other[i]:chase(env)
-	 if literal_i ~= other_i then
-	    env = literal_i:unify(other_i, env)
-	    if not env then
-	       return env
-	    end
-	 end
+         local literal_i = literal[i]:chase(env)
+         local other_i = other[i]:chase(env)
+         if literal_i ~= other_i then
+            env = literal_i:unify(other_i, env)
+            if not env then
+               return env
+            end
+         end
       end
       return env
    end
@@ -357,7 +357,7 @@ end
 local function is_in(term, literal)
    for i=1,#literal do
       if literal[i] == term then
-	 return true
+         return true
       end
    end
    return false
@@ -402,7 +402,7 @@ local function get_clause_id(clause)
    if not id then
       id = add_size(get_id(clause.head))
       for i=1,#clause do
-	 id = id .. add_size(get_id(clause[i]))
+         id = id .. add_size(get_id(clause[i]))
       end
       clause.id = id
    end
@@ -413,7 +413,7 @@ end
 -- each literal that makes up the clause.
 
 local function subst_in_clause(clause, env)
-   if not next(env) then	-- Found an empty map.
+   if not next(env) then        -- Found an empty map.
       return clause
    end
    local new = {head = subst(clause.head, env)}
@@ -444,7 +444,7 @@ end
 local function is_safe(clause)
    for i=1,#clause.head do
       if not clause.head[i]:is_safe(clause) then
-	 return false
+         return false
       end
    end
    return true
@@ -457,7 +457,7 @@ end
 function Var:is_safe(clause)
    for i=1,#clause do
       if is_in(self, clause[i]) then
-	 return true
+         return true
       end
    end
    return false
@@ -484,12 +484,12 @@ end
 
 local function assert(clause)
    if not is_safe(clause) then
-      return nil		-- An unsafe clause was detected.
+      return nil                -- An unsafe clause was detected.
    else
       local pred = clause.head.pred
-      if not pred.prim then	-- Ignore assertions for primitives.
-	 pred.db[get_clause_id(clause)] = clause
-	 insert(pred)
+      if not pred.prim then        -- Ignore assertions for primitives.
+         pred.db[get_clause_id(clause)] = clause
+         insert(pred)
       end
       return clause
    end
@@ -612,11 +612,11 @@ function fact(subgoal, literal)
    if not is_member(literal, subgoal.facts) then
       adjoin(literal, subgoal.facts)
       for i=1,#subgoal.waiters do
-	 local waiter = subgoal.waiters[i]
-	 local resolvent = resolve(waiter.clause, literal)
-	 if resolvent then
-	    add_clause(waiter.subgoal, resolvent)
-	 end
+         local waiter = subgoal.waiters[i]
+         local resolvent = resolve(waiter.clause, literal)
+         if resolvent then
+            add_clause(waiter.subgoal, resolvent)
+         end
       end
    end
 end
@@ -629,13 +629,13 @@ function rule(subgoal, clause, selected)
       table.insert(sg.waiters, {subgoal = subgoal, clause = clause})
       local todo = {}
       for id,fact in pairs(sg.facts) do
-	 local resolvent = resolve(clause, fact)
-	 if resolvent then
-	    table.insert(todo, resolvent)
-	 end
+         local resolvent = resolve(clause, fact)
+         if resolvent then
+            table.insert(todo, resolvent)
+         end
       end
       for i=1,#todo do
-	 add_clause(subgoal, todo[i])
+         add_clause(subgoal, todo[i])
       end
    else
       sg = make_subgoal(selected)
@@ -729,16 +729,16 @@ sequence of answers, each answer being an array of strings or numbers.
 -- Other parts of the Datalog system depend on the equality primitive,
 -- so carefully consider any modifications to it.
 
-do				-- equals primitive
+do                                -- equals primitive
    local binary_equals_pred = make_pred("=", 2)
 
    local function equals_primitive(literal, subgoal)
       local x = literal[1]
       local y = literal[2]
       local env = x:unify(y, {})-- Both terms must unify,
-      if env then		-- and at least one of them
-	 x = x:subst(env)	-- must be a constant.
-	 y = y:subst(env)
+      if env then                -- and at least one of them
+         x = x:subst(env)        -- must be a constant.
+         y = y:subst(env)
       end
       return x:equals_primitive(y, subgoal)
    end
@@ -747,9 +747,9 @@ do				-- equals primitive
    end
 
    function Const:equals_primitive(term, subgoal)
-      if self == term then	-- Both terms are constant and equal.
-	 local literal = {pred = binary_equals_pred, self, self}
-	 return fact(subgoal, literal)
+      if self == term then        -- Both terms are constant and equal.
+         local literal = {pred = binary_equals_pred, self, self}
+         return fact(subgoal, literal)
       end
    end
 
@@ -763,10 +763,10 @@ local function match(literal, fact)
    local env = {}
    for i=1,#literal do
       if literal[i] ~= fact[i] then
-	 env = literal[i]:match(fact[i], env)
-	 if not env then
-	    return env
-	 end
+         env = literal[i]:match(fact[i], env)
+         if not env then
+            return env
+         end
       end
    end
    return env
@@ -798,16 +798,16 @@ local function add_iter_prim(name, arity, iter)
    local pred = make_pred(name, arity)
    local function prim(literal, subgoal)
       for terms in iter(literal) do
-	 local n = #terms
-	 if n == arity then
-	    local new = {pred = pred}
-	    for i=1,n do
-	       new[i] = make_const(terms[i])
-	    end
-	    if match(literal, new) then
-	       fact(subgoal, new)
-	    end
-	 end
+         local n = #terms
+         if n == arity then
+            local new = {pred = pred}
+            for i=1,n do
+               new[i] = make_const(terms[i])
+            end
+            if match(literal, new) then
+               fact(subgoal, new)
+            end
+         end
       end
    end
    pred.prim = prim
@@ -820,44 +820,44 @@ end
 -- It defines the fact three(3).
 
 add_iter_prim("three", 1,
-	      function(literal)
-		 return function(s, v)
-			   if v then
-			      return nil
-			   else
-			      return {3}
-			   end
-			end
-	      end)
+              function(literal)
+                 return function(s, v)
+                           if v then
+                              return nil
+                           else
+                              return {3}
+                           end
+                        end
+              end)
 
 -- Example of the successor primitive.
 
 local function succ(literal)
    return function(s, v)
-	     if v then
-		return nil
-	     else
-		local x = literal[1]
-		local y = literal[2]
-		if y:is_const() then
-		   local j = tonumber(y.id)
-		   if j and j >= 0 then
-		      return {j + 1, j}
-		   else
-		      return nil
-		   end
-		elseif x:is_const() then
-		   local i = tonumber(x.id)
-		   if i and i > 0 then
-		      return {i, i - 1}
-		   else
-		      return nil
-		   end
-		else
-		   return nil
-		end
-	     end
-	  end
+             if v then
+                return nil
+             else
+                local x = literal[1]
+                local y = literal[2]
+                if y:is_const() then
+                   local j = tonumber(y.id)
+                   if j and j >= 0 then
+                      return {j + 1, j}
+                   else
+                      return nil
+                   end
+                elseif x:is_const() then
+                   local i = tonumber(x.id)
+                   if i and i > 0 then
+                      return {i, i - 1}
+                   else
+                      return nil
+                   end
+                else
+                   return nil
+                end
+             end
+          end
 end
 datalog.add_iter_prim("succ", 2, succ)
 
@@ -927,11 +927,11 @@ function dl_ask(literal)
    for i=1,n do
       local answer = answers[i]
       for j=1,arity do
-	 size = size + string.len(answer[j]) + 1
+         size = size + string.len(answer[j]) + 1
       end
    end
    answers.size = size
-   answers.n = n		-- Hack to hand back the size
+   answers.n = n                -- Hack to hand back the size
    return answers
 end
 
