@@ -210,7 +210,9 @@ _.extend(Story.prototype, {
                 $(e.target).closest('[data-passage]').data('passage')
             )
             datalog.perform(linkName);
-			this.show(linkName);
+            var linkParts = linkName.split(",");
+            console.log(linkParts);
+			this.show(linkParts[linkParts.length-1].trim());
 		}.bind(this));
 
 		/* Set up hash change handler for save/restore. */
