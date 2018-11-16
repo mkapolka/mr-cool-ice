@@ -1,6 +1,10 @@
-> I'm currently seeking new maintainers to take on this project. Please [contact me](https://chrisklimas.com/contact) if you're interested in taking on this responsibility. -- Chris
+# ~~Snowman~~ MR COOL ICE
 
-# Snowman
+![](https://i.ytimg.com/vi/jUC7od-mp70/hqdefault.jpg)
+
+ICE IS NICE BABEY
+
+My random hacks on snowman
 
 Snowman is a minimal Twine 2 story format designed for people who already know
 JavaScript and CSS. It's designed to implement basic functionality for playing
