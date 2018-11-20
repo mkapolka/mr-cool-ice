@@ -154,13 +154,14 @@ end
 -- A literal is a predicate and a sequence of terms, the number of
 -- which must match the predicate's arity.
 
-local function make_literal(pred_name, terms)
+local function make_literal(pred_name, terms, negated)
    local arity = #terms
    local pred = make_pred(pred_name, arity)
    local literal = {pred = pred}
    for i=1,arity do
       literal[i] = terms[i]
    end
+   literal.negated = negated
    return literal
 end
 
@@ -800,37 +801,6 @@ do                                -- equals primitive
    end
 
    binary_equals_pred.prim = equals_primitive
-end
-
-do
-    local function not_prim_n(n)
-        return function(literal, subgoal)
-            local inner_pred = literal[1].id
-            local args = {}
-            for i=2,n+1 do
-                args[i-1] = literal[i]
-            end
-            local inner_literal = make_literal(inner_pred, args)
-            local inner_subgoal = find(inner_literal)
-            if not inner_subgoal then
-                inner_subgoal = make_subgoal(inner_literal)
-                merge(inner_subgoal)
-            end
-            search(inner_subgoal)
-            if not next(inner_subgoal.facts) then
-                return fact(subgoal, literal)
-            end
-        end
-    end
-
-    local function make_not(n)
-        local p = make_pred("not", n)
-        p.prim = not_prim_n(n-1)
-    end
-
-    for i=1,10 do
-        make_not(i)
-    end
 end
 
 -- Does a literal unify with an fact known to contain only constant
