@@ -384,7 +384,7 @@ end
 -- true.
 
 local function make_clause(head, body)
-   local clause = {head = head}
+   local clause = {head = head, delayed={}}
    for i=1,#body do
       clause[i] = body[i]
    end
@@ -412,6 +412,7 @@ end
 -- Clause substitution in which the substitution is applied to each
 -- each literal that makes up the clause.
 
+-- = (A:-D|L...) * θ
 local function subst_in_clause(clause, env)
    if not next(env) then        -- Found an empty map.
       return clause
@@ -456,7 +457,8 @@ end
 
 function Var:is_safe(clause)
    for i=1,#clause do
-      if is_in(self, clause[i]) then
+      local is_not = clause[i].pred.id:find("^not/")
+      if not is_not and is_in(self, clause[i]) then
          return true
       end
    end
@@ -484,6 +486,7 @@ end
 
 local function assert(clause)
    if not is_safe(clause) then
+      print("Refusing to assert unsafe clause: ", clause.head.pred.id)
       return nil                -- An unsafe clause was detected.
    else
       local pred = clause.head.pred
@@ -604,14 +607,48 @@ local function resolve(clause, literal)
    return new
 end
 
+-- This is copied for now in case I need to update resolve()
+local function factor(clause, answer)
+   local n = #clause
+   if n == 0 then
+      return nil
+   end
+   local env = unify(clause[1], rename(literal))
+   if not env then
+      return nil
+   end
+   local delayed = {}
+
+   for i=1,#clause.delayed do
+      delayed[i] = clause.delayed[i]
+   end
+   delayed[#delayed] = clause[1]
+
+   n = n - 1
+   local new = {head = subst(clause.head, env), delayed=delayed}
+   for i=1,n do
+      new[i] = subst(clause[i + 1], env)
+   end
+   return new
+end
+
 -- Store a fact, and inform all waiters of the fact too.
 
 local fact, rule, add_clause, search
 
+-- = SLG_ANSWER
+-- Whitepaper version of this method takes a clause, not a literal
+-- Will need to add transformation "negation-failure-r" here
+--    subgoal.facts = Anss(A)
+--    subgoal.waiters = Poss(A)
 function fact(subgoal, literal)
    if not is_member(literal, subgoal.facts) then
+       -- will need to make this take a clause, check for delayed literals
+       -- in the clause
       adjoin(literal, subgoal.facts)
       for i=1,#subgoal.waiters do
+          -- reset negs(subgoal) to empty
+          -- subgoal.neg_waiters = {}
          local waiter = subgoal.waiters[i]
          local resolvent = resolve(waiter.clause, literal)
          if resolvent then
@@ -623,6 +660,7 @@ end
 
 -- Use a newly derived rule.
 
+-- = SLG_POSITIVE
 function rule(subgoal, clause, selected)
    local sg = find(selected)
    if sg then
@@ -642,25 +680,33 @@ function rule(subgoal, clause, selected)
       table.insert(sg.waiters, {subgoal = subgoal, clause = clause})
       merge(sg)
       return search(sg)
+      -- UPDATE_SUBGOAL
    end
 end
 
+-- = SLG_NEWCLAUSE
 function add_clause(subgoal, clause)
    if #clause == 0 then
       return fact(subgoal, clause.head)
    else
       return rule(subgoal, clause, clause[1])
    end
+   -- = SLG_NEGATIVE?
+   -- if clause[1].negative then
+   -- return negative(subgoal, clause, clause[1])
+   -- end
 end
 
 -- Search for derivations of the literal associated with this subgoal.
 
+-- = SLG_SUBGOAL ? 
 function search(subgoal)
    local literal = subgoal.literal
    if literal.pred.prim then
       return literal.pred.prim(literal, subgoal)
    else
       for id,clause in pairs(literal.pred.db) do
+         -- Making SLG Resolvents of subgoal (G)
          local renamed = rename_clause(clause)
          local env = unify(literal, renamed.head)
          if env then
@@ -754,6 +800,37 @@ do                                -- equals primitive
    end
 
    binary_equals_pred.prim = equals_primitive
+end
+
+do
+    local function not_prim_n(n)
+        return function(literal, subgoal)
+            local inner_pred = literal[1].id
+            local args = {}
+            for i=2,n+1 do
+                args[i-1] = literal[i]
+            end
+            local inner_literal = make_literal(inner_pred, args)
+            local inner_subgoal = find(inner_literal)
+            if not inner_subgoal then
+                inner_subgoal = make_subgoal(inner_literal)
+                merge(inner_subgoal)
+            end
+            search(inner_subgoal)
+            if not next(inner_subgoal.facts) then
+                return fact(subgoal, literal)
+            end
+        end
+    end
+
+    local function make_not(n)
+        local p = make_pred("not", n)
+        p.prim = not_prim_n(n-1)
+    end
+
+    for i=1,10 do
+        make_not(i)
+    end
 end
 
 -- Does a literal unify with an fact known to contain only constant
