@@ -458,8 +458,7 @@ end
 
 function Var:is_safe(clause)
    for i=1,#clause do
-      local is_not = clause[i].pred.id:find("^not/")
-      if not is_not and is_in(self, clause[i]) then
+      if is_in(self, clause[i]) then
          return true
       end
    end
