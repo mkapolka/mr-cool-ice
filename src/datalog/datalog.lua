@@ -40,6 +40,7 @@ USA
 -- For example, after internalization, there is one constant for each
 -- string used to name a constant.
 
+local MAX_INT = 999999999
 local weak_mt = {__mode = "v"}
 
 local function mk_intern(maker)
@@ -165,8 +166,27 @@ local function make_literal(pred_name, terms, negated)
    return literal
 end
 
+-- Return a clone of the literal with the opposite negated value
+local function negate(literal)
+    local output = {pred = literal.pred}
+    for i=1,#literal do
+        output[i] = literal[i]
+    end
+    output.negated = not literal.negated
+    return output
+end
+
 local function add_size(str)
    return tostring(string.len(str)) .. ":" .. str
+end
+
+local function is_ground(literal)
+    for i=1,#literal do
+        if not literal[i]:is_const() then
+            return false
+        end
+    end
+    return true
 end
 
 -- A literal's id is computed on demand, but then cached.  It is used
@@ -182,6 +202,11 @@ local function get_id(literal)
       for i=1,#literal do
          id = id .. add_size(literal[i]:get_id())
       end
+
+      --if literal.negated then
+         --id = "~" .. id
+      --end
+
       literal.id = id
    end
    return id
@@ -370,8 +395,8 @@ local function is_member(literal, tbl)
    return tbl[get_id(literal)]
 end
 
-local function adjoin(literal, tbl)
-   tbl[get_id(literal)] = literal
+local function adjoin(clause, tbl)
+   tbl[get_id(clause.head)] = clause
 end
 
 -- Clauses
@@ -418,7 +443,10 @@ local function subst_in_clause(clause, env)
    if not next(env) then        -- Found an empty map.
       return clause
    end
-   local new = {head = subst(clause.head, env)}
+   local new = {head = subst(clause.head, env), delayed={}}
+   for i=1,#clause.delayed do
+      new.delayed[i] = clause.delayed[i]
+   end
    for i=1,#clause do
       new[i] = subst(clause[i], env)
    end
@@ -439,6 +467,54 @@ local function rename_clause(clause)
    else
       return subst_in_clause(clause, env)
    end
+end
+
+-- Remove the selected literal from the clause.
+local function remove_selected(clause, target)
+    if not target then
+        target = clasue[1]
+    end
+    local output = {head=clause.head, delayed={}}
+    for i=1,#clause.delayed do
+        output.delayed[i] = clause.delayed[i]
+    end
+    for i=1,#clause do
+        if get_tag(clause[i]) ~= get_tag(target) then
+            output[#output+1] = clasue[i]
+        end
+    end
+    return output
+end
+
+local function delay_selected(clause, target)
+    if not target then
+        target = clause[1]
+    end
+
+    local output = {head=clause.head, delayed={}}
+    for i=1,#clause.delayed do
+        output[i] = clause.delayed[i]
+    end
+    output.delayed[#output.delayed] = target
+    for i=1,#clause do
+        if get_tag(clause[i]) ~= get_tag(target) then
+            output[#output+1] = clause[i]
+        end
+    end
+    return output
+end
+
+local function subsumes(clause_a, clause_b)
+    return unify(clause_a.head, clause_b.head) ~= nil
+end
+
+local function subsumed_by_any(clause, facts)
+    for _, value in pairs(facts) do
+        if subsumes(value, clause) then
+            return true
+        end
+    end
+    return false
 end
 
 -- A clause is safe if every variable in its head is in its body.
@@ -484,6 +560,7 @@ end
 
 -- Add a safe clause to the database.
 
+local lua_assert = assert
 local function assert(clause)
    if not is_safe(clause) then
       print("Refusing to assert unsafe clause: ", clause.head.pred.id)
@@ -576,13 +653,68 @@ local function merge(subgoal)
    subgoals[get_tag(subgoal.literal)] = subgoal
 end
 
+local function find_stack(literal)
+    local tag = get_tag(literal)
+    for k,v in pairs(STACK) do
+        if get_tag(v.literal) == get_tag(literal) then
+            return v
+        end
+    end
+    return nil
+end
+
+local function push(subgoal)
+    table.insert(STACK, subgoal)
+end
+
+local function pop()
+    local output = table.remove(STACK)
+    return output
+end
+
+local function peek()
+    return STACK[#STACK-1]
+end
+
+local function pop_until(subgoal)
+    output = {}
+    local popped = nil
+    while popped ~= subgoal and #STACK > 0 do
+        popped = pop()
+        table.insert(output, popped)
+    end
+    return output
+end
+
+local function peek_until(subgoal)
+    output = {}
+    local peeked = nil
+    local i = #subgoal - 1
+    while peeked ~= subgoal and i > 0 do
+        peeked = STACK[i]
+        table.insert(output, peeked)
+    end
+    return output
+end
+
 -- A subgoal is the item that is tabled by this algorithm.
 
 -- A subgoal has a literal, a set of facts, and an array of waiters.
 -- A waiter is a pair containing a subgoal and a clause.
 
 local function make_subgoal(literal)
-   return {literal = literal, facts = {}, waiters = {}}
+   local subgoal = {
+       literal = literal,
+       facts = {},
+       waiters = {},
+       neg_waiters={},
+       complete=false,
+       dfn=COUNT,
+       poslink=COUNT,
+       neglink=MAX_INT
+    }
+    COUNT = COUNT + 1
+    return subgoal
 end
 
 -- Resolve the selected literal of a clause with a literal.  The
@@ -600,15 +732,19 @@ local function resolve(clause, literal)
       return nil
    end
    n = n - 1
-   local new = {head = subst(clause.head, env)}
+   local new = {head = subst(clause.head, env), delayed={}}
    for i=1,n do
       new[i] = subst(clause[i + 1], env)
+   end
+
+   for i=1,#clause.delayed do
+      new.delayed[i] = clause.delayed[i]
    end
    return new
 end
 
 -- This is copied for now in case I need to update resolve()
-local function factor(clause, answer)
+local function factor(clause, literal)
    local n = #clause
    if n == 0 then
       return nil
@@ -641,67 +777,211 @@ local fact, rule, add_clause, search
 -- Will need to add transformation "negation-failure-r" here
 --    subgoal.facts = Anss(A)
 --    subgoal.waiters = Poss(A)
-function fact(subgoal, literal)
+function fact(subgoal, clause, state)
+   print("fact", get_id(subgoal.literal))
+   local literal = clause.head
+   -- TODO: See if this ever fails. If so we might need to change
+   -- the is_member here w/ subsumed_by_any
+   lua_assert(is_ground(literal))
+
    if not is_member(literal, subgoal.facts) then
        -- will need to make this take a clause, check for delayed literals
        -- in the clause
-      adjoin(literal, subgoal.facts)
-      for i=1,#subgoal.waiters do
-          -- reset negs(subgoal) to empty
-          -- subgoal.neg_waiters = {}
-         local waiter = subgoal.waiters[i]
-         local resolvent = resolve(waiter.clause, literal)
-         if resolvent then
-            add_clause(waiter.subgoal, resolvent)
-         end
-      end
+      adjoin(clause, subgoal.facts)
+      if #clause.delayed == 0 then
+          for i=1,#subgoal.waiters do
+             subgoal.neg_waiters = {}
+             local waiter = subgoal.waiters[i]
+             local resolvent = resolve(waiter.clause, literal)
+             if resolvent then
+                add_clause(waiter.subgoal, resolvent, state)
+             end
+          end
+       else -- delayed literals
+            -- if no other answer in Anss(subgoal) has same head as clause
+            for i=1,#subgoal.watiers do
+                local waiter = subgoal.waiters[i]
+                local factor = factor(waiter.clause, literal)
+                if factor then
+                    add_clause(waiter.subgoal, factor, state)
+                end
+            end
+       end
    end
 end
 
 -- Use a newly derived rule.
 
 -- = SLG_POSITIVE
-function rule(subgoal, clause, selected)
+function rule(subgoal, clause, selected, state)
+    print("positive", get_id(subgoal.literal))
    local sg = find(selected)
    if sg then
-      table.insert(sg.waiters, {subgoal = subgoal, clause = clause})
+      if not sg.complete then
+         table.insert(sg.waiters, {subgoal = subgoal, clause = clause})
+         update_lookup(subgoal, sg, true, state)
+      end
       local todo = {}
       for id,fact in pairs(sg.facts) do
-         local resolvent = resolve(clause, fact)
-         if resolvent then
-            table.insert(todo, resolvent)
+         local head = fact.head
+         if #fact.delayed == 0 then
+             local resolvent = resolve(clause, head)
+             if resolvent then
+                table.insert(todo, resolvent)
+             end
+         else
+            local f = factor(clause, head)
+            if f then
+                table.insert(todo, f)
+            end
          end
       end
       for i=1,#todo do
-         add_clause(subgoal, todo[i])
+         add_clause(subgoal, todo[i], state)
       end
    else
       sg = make_subgoal(selected)
+      push(sg)
+      local b_state = {posmin = sg.dfn, negmin = MAX_INT}
+
       table.insert(sg.waiters, {subgoal = subgoal, clause = clause})
       merge(sg)
-      return search(sg)
-      -- UPDATE_SUBGOAL
+      search(sg, b_state)
+      update_solution(subgoal, sg, true, state, b_state)
    end
 end
 
+-- = SLG_NEGATIVE
+function negative(subgoal, clause, selected, state)
+    local sg = find(selected)
+    print("negative", get_id(subgoal.literal), sg)
+    if sg then
+        if sg.complete then
+            if #sg.facts == 0 then
+                -- TODO: Whitepaper says "with ~B removed",
+                -- Is selected for us always ~B?
+                local trimmed = remove_selected(clause)
+                add_clause(subgoal, trimmed, state)
+            elseif not is_member(selected, sg.facts) then -- if B :- | not in Anss(B)
+                local delayed = delay_selected(selected)
+                add_clause(sg, delayed, state)
+            end
+        else
+            if not is_member(negate(selected), sg.facts) then
+                table.insert(sg.neg_waiters, {subgoal=subgoal, clause=clause})
+                update_lookup(subgoal, sg, false, state)
+            end
+        end
+    else
+        sg = make_subgoal(selected)
+        push(sg)
+
+        local b_state = {posmin = sg.dfn, negmin = MAX_INT}
+        table.insert(sg.neg_waiters, {subgoal=subgoal, clause=clause})
+
+        merge(sg)
+        search(sg, b_state)
+        update_solution(subgoal, sg, false, state, b_state)
+    end
+end
+
 -- = SLG_NEWCLAUSE
-function add_clause(subgoal, clause)
+function add_clause(subgoal, clause, state)
+    print("Adding clause", get_id(subgoal.literal))
    if #clause == 0 then
-      return fact(subgoal, clause.head)
+      return fact(subgoal, clause, state)
+   elseif not clause[1].negated then
+      return rule(subgoal, clause, clause[1], state)
    else
-      return rule(subgoal, clause, clause[1])
+      -- Check if this is a "ground literal" (no free variables I think?)
+      lua_assert(is_ground(clause[1]))
+      return negative(subgoal, clause, clause[1], state)
    end
-   -- = SLG_NEGATIVE?
-   -- if clause[1].negative then
-   -- return negative(subgoal, clause, clause[1])
-   -- end
+end
+
+function update_lookup(subgoal_a, subgoal_b, positive, state)
+    if positive then
+        subgoal_a.poslink = math.min(subgoal_a.poslink, subgoal_b.poslink)
+        subgoal_a.neglink = math.min(subgoal_a.neglink, subgoal_b.neglink)
+        state.posmin =  math.min(state.posmin, subgoal_b.poslink)
+        state.negmin =  math.min(state.negmin, subgoal_b.neglink)
+    else
+        subgoal_a.poslink = math.min(subgoal_a.neglink, subgoal_b.poslink, subgoal_b.neglink)
+        state.negmin = math.min(state.negmin, subgoal_b.poslink, subgoal_b.neglink)
+    end
+end
+
+function update_solution(subgoal_a, subgoal_b, positive, state_a, state_b)
+    if subgoal_b.complete then
+        subgoal_a.poslink = math.min(subgoal_a.poslink, state_b.posmin)
+        subgoal_a.neglink = math.min(subgoal_a.neglink, state_b.negmin)
+        state_a.posmin = math.min(state_a.posmin, state_b.posmin)
+        state_a.negmin = math.min(state_a.negmin, state_b.negmin)
+    else
+        update_lookup(subgoal_a, subgoal_b, positive, state_a)
+    end
+end
+
+function complete(subgoal, state)
+    print("Complete", get_id(subgoal.literal))
+    subgoal.poslink = math.min(subgoal.poslink, state.posmin)
+    subgoal.neglink = math.min(subgoal.neglink, state.negmin)
+    if subgoal.poslink == subgoal.dfn and subgoal.neglink == MAX_INT then
+        print("First branch")
+        local popped = pop_until(subgoal)
+        local L = {} -- TODO: Name this
+        for _, sub_b in pairs(popped) do
+            print("Doing ", get_id(sub_b.literal))
+            local negs = sub_b.neg_waiters
+            print("#negs", #negs)
+            sub_b.complete = true
+            sub_b.waiters = {}
+            sub_b.neg_waiters = {}
+            for _, waiter in pairs(negs) do
+                if #waiter.subgoal.facts == 0 then
+                    local trimmed = remove_selected(waiter.clause, sub_b.literal)
+                    table.insert(L, {subgoal=waiter.subgoal, clause=trimmed})
+                elseif #waiter.clause.delayed > 0 then
+                    local delayed = delay_selected(waiter.clause, sub_b.literal)
+                    table.insert(L, {subgoal=waiter.subgoal, clause=trimmed})
+                end
+            end
+            state.posmin = MAX_INT
+            state.negmin = MAX_INT
+            for _, waiter in pairs(L) do
+                add_clause(waiter.subgoal, waiter.clause, state)
+            end
+        end
+    elseif subgoal.poslink == subgoal.dfn and subgoal.neglink >= subgoal.dfn then
+        print("Second branch")
+        local peeked = peek_until(subgoal)
+        local L = {} -- TODO: name this
+        for _, subgoal in pairs(peeked) do
+            for _, waiter in pairs(subgoal.neg_waiters) do
+                local delayed = delay_selected(waiter.clause)
+                table.insert(L, {subgoal=waiter.subgoal, clause=delayed})
+            end
+            subgoal.neglink = MAX_INT
+            subgoal.neg_waiters = {}
+        end
+        print(#STACK)
+        state.posmin = peek().dfn
+        state.negmin = MAX_INT
+        for _, waiter in pairs(L) do
+            add_clause(waiter.subgoal, waiter.clause, state)
+        end
+        for _, peeked_subgoal in pairs(peeked) do
+            complete(peeked_subgoal, state)
+        end
+    end
 end
 
 -- Search for derivations of the literal associated with this subgoal.
 
 -- = SLG_SUBGOAL ? 
-function search(subgoal)
+function search(subgoal, state)
    local literal = subgoal.literal
+   print("Searching ", get_id(literal))
    if literal.pred.prim then
       return literal.pred.prim(literal, subgoal)
    else
@@ -710,10 +990,11 @@ function search(subgoal)
          local renamed = rename_clause(clause)
          local env = unify(literal, renamed.head)
          if env then
-            add_clause(subgoal, subst_in_clause(renamed, env))
+            add_clause(subgoal, subst_in_clause(renamed, env), state)
          end
       end
    end
+   complete(subgoal, state)
 end
 
 -- Sets up and calls the subgoal search procedure, and then extracts
@@ -721,14 +1002,29 @@ end
 -- the predicate, the predicate's arity, and an array of constant
 -- terms for each answer.  If there are no answers, nil is returned.
 
+STACK = {}
+COUNT = 1
+
 local function ask(literal)
    subgoals = {}
+   STACK = {}
+   COUNT = 1
+
    local subgoal = make_subgoal(literal)
+
+   push(subgoal)
+   local state = {posmin = subgoal.dfn, negmin=MAX_INT}
+
    merge(subgoal)
-   search(subgoal)
+   search(subgoal, state)
+
    subgoals = nil
+   stack = nil
+   COUNT = 0
+
    local answers = {}
-   for id,literal in pairs(subgoal.facts) do
+   for id,clause in pairs(subgoal.facts) do
+      local literal = clause.head
       local answer = {}
       for i=1,#literal do -- Each term in an answer will be
          table.insert(answer, literal[i].id) -- a constant.
@@ -795,7 +1091,8 @@ do                                -- equals primitive
    function Const:equals_primitive(term, subgoal)
       if self == term then        -- Both terms are constant and equal.
          local literal = {pred = binary_equals_pred, self, self}
-         return fact(subgoal, literal)
+         local clause = make_clause(literal, {})
+         return fact(subgoal, clause)
       end
    end
 
@@ -850,8 +1147,9 @@ local function add_iter_prim(name, arity, iter)
             for i=1,n do
                new[i] = make_const(terms[i])
             end
+            local clause = make_clause(new, {})
             if match(literal, new) then
-               fact(subgoal, new)
+               fact(subgoal, clause)
             end
          end
       end
@@ -1010,5 +1308,8 @@ datalog = {
    revert = revert,
    ask = ask,
    add_iter_prim = add_iter_prim,
-   make_list = make_list
+   make_list = make_list,
+   unify = unify
 }
+
+return datalog
