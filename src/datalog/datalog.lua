@@ -515,7 +515,7 @@ end
 -- Remove the selected literal from the clause.
 local function remove_selected(clause, target)
     if not target then
-        target = clasue[1]
+        target = clause[1]
     end
     local output = {head=clause.head, delayed={}}
     for i=1,#clause.delayed do
@@ -523,7 +523,7 @@ local function remove_selected(clause, target)
     end
     for i=1,#clause do
         if get_tag(clause[i]) ~= get_tag(target) then
-            output[#output+1] = clasue[i]
+            output[#output+1] = clause[i]
         end
     end
     return output
@@ -606,7 +606,7 @@ end
 local lua_assert = assert
 local function assert(clause)
    if not is_safe(clause) then
-      --dprint("Refusing to assert unsafe clause: ", clause.head.pred.id)
+      print("Refusing to assert unsafe clause: ", clause.head.pred.id)
       return nil                -- An unsafe clause was detected.
    else
       local pred = clause.head.pred
@@ -834,8 +834,8 @@ function fact(subgoal, clause, state)
       --dprint("Adjoining", get_id(clause.head), "to", get_id(subgoal.literal))
       adjoin(clause, subgoal.facts)
       if #clause.delayed == 0 then
+          subgoal.neg_waiters = {}
           for i=1,#subgoal.waiters do
-             subgoal.neg_waiters = {}
              local waiter = subgoal.waiters[i]
              local resolvent = resolve(waiter.clause, literal)
              if resolvent then
@@ -936,8 +936,7 @@ function add_clause(subgoal, clause, state)
    elseif not clause[1].negated then
       return rule(subgoal, clause, clause[1], state)
    else
-      -- Check if this is a "ground literal" (no free variables I think?)
-      lua_assert(is_ground(clause[1]))
+      --lua_assert(is_ground(clause[1]))
       return negative(subgoal, clause, clause[1], state)
    end
 end

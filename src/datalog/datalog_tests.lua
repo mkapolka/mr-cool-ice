@@ -210,3 +210,12 @@ test("P Q test", function()
     local answers = datalog.ask(lit_p)
     assert(answers == nil)
 end)
+
+test("Negative unbound", function()
+    -- foo ;- baz(Y).
+    local lit_foo = dl.make_literal("10foo", {})
+    local lit_baz = dl.make_literal("10baz", {dl.make_var("Y")}, true)
+    dl.assert(dl.make_clause(lit_foo, {lit_baz}))
+    local answers = dl.ask(lit_foo)
+    assert(#answers == 1)
+end)

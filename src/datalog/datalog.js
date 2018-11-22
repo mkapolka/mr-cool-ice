@@ -220,7 +220,7 @@ Handlebars.registerHelper("q", function(query, options) {
     query = _HBFormatPassage(query, options.hash);
     let answers = public_ask(query);
     if (answers.length === 0) {
-        return options.inverse();
+        return options.inverse(options.hash);
     }
     let limit = options.hash.limit || 10000;
     for (let answer of answers.slice(0, limit)) {
@@ -230,7 +230,7 @@ Handlebars.registerHelper("q", function(query, options) {
 })
 
 Handlebars.registerHelper("assert", function(query, options) {
-    public_assert(query);
+    public_assert(_HBFormatPassage(query, options.hash));
 })
 
 Handlebars.registerHelper("perform", function(query, options) {
