@@ -69,7 +69,7 @@ function _statement_to_literal(statement) {
             terms.push(make_var(token.name))
         }
     }
-    return make_literal(statement.words, make_list(terms));
+    return make_literal(statement.words, make_list(terms), statement.negated);
 }
 
 function _string_to_clauses(text) {

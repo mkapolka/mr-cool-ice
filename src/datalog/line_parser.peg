@@ -6,11 +6,7 @@ multistatement = statement:statement statements:statement+ [.\n]* { return { typ
 
 statement = not_statement / meta_statement / simple_statement
 not_statement = spaces "not:" statement:simple_statement {
-    statement.tokens.unshift({
-        type: "const",
-        name: statement.words
-    });
-    statement.words = "not";
+    statement.negated = true;
     return statement;
 }
 meta_statement = command:word ":" statement:simple_statement {

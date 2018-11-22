@@ -149,11 +149,7 @@ function peg$parse(input, options) {
       peg$c5 = "not:",
       peg$c6 = peg$literalExpectation("not:", false),
       peg$c7 = function(statement) {
-          statement.tokens.unshift({
-              type: "const",
-              name: statement.words
-          });
-          statement.words = "not";
+          statement.negated = true;
           return statement;
       },
       peg$c8 = ":",

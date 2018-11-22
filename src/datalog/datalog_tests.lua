@@ -207,7 +207,6 @@ test("P Q test", function()
     assert(#answers == 1)
 
     dl.assert(dl.make_clause(lit_r, {}))
-    print("=======second ask")
     local answers = datalog.ask(lit_p)
     assert(answers == nil)
 end)
