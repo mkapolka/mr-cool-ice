@@ -2,6 +2,9 @@ local dl = require("datalog")
 local dbg = require("debugger")
 
 function test(name, f)
+    if ONLY_TEST and name ~= ONLY_TEST then return end
+    print("=================")
+    print("Starting " .. name)
     local success, err = xpcall(f, debug.traceback)
     if success then
         print(name .. ": ok")
@@ -116,16 +119,62 @@ test("Unbound variable in body", function()
     end
 end)
 
+test("Transitive Closure", function()
+    -- foo(X, Z) :- foo(X, Y), foo(Y, Z).
+    -- foo(a, b), foo(b, c)
+    local X, Y, Z = dl.make_var("X"), dl.make_var("Y"), dl.make_var("Z")
+    local a, b, c = dl.make_const("a"), dl.make_const("b"), dl.make_const("c")
+    local lit_foo_X_Z = dl.make_literal("8foo", {X, Z})
+    local lit_foo_X_Y = dl.make_literal("8foo", {X, Y})
+    local lit_foo_Y_Z = dl.make_literal("8foo", {Y, Z})
+    dl.assert(dl.make_clause(lit_foo_X_Z, {lit_foo_X_Y, lit_foo_Y_Z}))
+    dl.assert(dl.make_clause(dl.make_literal("8foo", {a, b}), {}))
+    dl.assert(dl.make_clause(dl.make_literal("8foo", {b, c}), {}))
+    local answers = dl.ask(dl.make_literal("8foo", {a, X}))
+    assert(#answers == 2)
+
+    local a = {c = true, b = true}
+    for i=1,#answers do
+        assert(a[answers[i][2]])
+    end
+end)
+
 
 test("Simple negated test", function()
     local lit_foo = dl.make_literal("2foo", {})
     local lit_not_bar = dl.make_literal("2bar", {}, true)
     local clause = dl.make_clause(lit_foo, {lit_not_bar})
-    datalog.assert(clause)
+    dl.assert(clause)
     local answers = datalog.ask(lit_foo)
     assert(answers ~= nil)
     assert(#answers == 1)
     assert(answers.name == "2foo")
+end)
+
+test("Negated with variables", function()
+    -- foo(X) :- bar(X), ~baz(X).
+    local lit_foo = dl.make_literal("7foo", {dl.make_var("X")})
+    local lit_bar = dl.make_literal("7bar", {dl.make_var("X")})
+    local lit_not_baz = dl.make_literal("7baz", {dl.make_var("X")}, true)
+    dl.assert(dl.make_clause(lit_foo, {lit_bar, lit_not_baz}))
+    -- bar(test)
+    local bar_test = dl.make_literal("7bar", {dl.make_const("test")})
+    dl.assert(dl.make_clause(bar_test, {}))
+    local answers = dl.ask(lit_foo)
+    assert(#answers == 1)
+    assert(answers[1][1] == "test")
+
+    -- baz(test)
+    local baz_test = dl.make_literal("7baz", {dl.make_const("test")})
+    dl.assert(dl.make_clause(baz_test, {}))
+    local answers = dl.ask(lit_foo)
+    assert(answers == nil)
+
+    local bar_test2 = dl.make_literal("7bar", {dl.make_const("test2")})
+    dl.assert(dl.make_clause(bar_test2, {}))
+    local answers = dl.ask(lit_foo)
+    assert(#answers == 1)
+    assert(answers[1][1] == "test2")
 end)
 
 test("Self negated test", function()
@@ -133,9 +182,32 @@ test("Self negated test", function()
     local lit_foo = dl.make_literal("6foo", {})
     local lit_not_foo = dl.make_literal("6foo", {}, true)
     local clause = dl.make_clause(lit_foo, {lit_not_foo})
-    datalog.assert(clause)
+    dl.assert(clause)
     local answers = datalog.ask(lit_foo)
+    -- Why does it to this?
     assert(answers ~= nil)
     assert(#answers == 1)
-    assert(answers.name == "2foo")
+    assert(answers.name == "6foo")
+end)
+
+test("P Q test", function()
+    -- p :- ~q
+    -- q :- ~p
+    -- q :- r
+    local lit_p = dl.make_literal("9p", {})
+    local lit_np = dl.make_literal("9p", {}, true)
+    local lit_q = dl.make_literal("9q", {})
+    local lit_nq = dl.make_literal("9q", {}, true)
+    local lit_r = dl.make_literal("9r", {})
+    dl.assert(dl.make_clause(lit_p, {lit_nq}))
+    dl.assert(dl.make_clause(lit_q, {lit_np}))
+    dl.assert(dl.make_clause(lit_q, {lit_r}))
+
+    local answers = datalog.ask(lit_p)
+    assert(#answers == 1)
+
+    dl.assert(dl.make_clause(lit_r, {}))
+    print("=======second ask")
+    local answers = datalog.ask(lit_p)
+    assert(answers == nil)
 end)
