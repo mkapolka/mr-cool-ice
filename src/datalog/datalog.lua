@@ -363,7 +363,7 @@ function Const:unify(term, env)
 end
 
 function Const:unify_const(const, env)
-   return nil
+   return self.id == const.id
 end
 
 function Var:unify_const(const, env)
@@ -1145,6 +1145,24 @@ do                                -- equals primitive
    end
 
    binary_equals_pred.prim = equals_primitive
+end
+
+do                                -- equals primitive
+   local binary_unequals_pred = make_pred("% != %", 2)
+
+   local function unequals_primitive(literal, subgoal)
+      local x = literal[1]
+      local y = literal[2]
+      local env = x:unify(y, {})-- Both terms must unify,
+      if not env then                -- and at least one of them
+         local literal = {pred = binary_unequals_pred, x, y}
+         print("neq", x.id, y.id)
+         local clause = make_clause(literal, {})
+         return fact(subgoal, clause)
+      end
+   end
+
+   binary_unequals_pred.prim = unequals_primitive
 end
 
 -- Does a literal unify with an fact known to contain only constant

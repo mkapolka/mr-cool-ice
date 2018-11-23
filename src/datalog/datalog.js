@@ -66,7 +66,11 @@ function _statement_to_literal(statement) {
             terms.push(make_const(token.name));
         }
         if (token.type === "variable") {
-            terms.push(make_var(token.name))
+            if (token.name != "") {
+                terms.push(make_var(token.name))
+            } else {
+                terms.push(make_var())
+            }
         }
     }
     return make_literal(statement.words, make_list(terms), statement.negated);
@@ -107,21 +111,22 @@ function public_retract(text) {
 function format_answers(answers, varNames) {
     var output = []
     if (!answers) { return [] }
+    var result_set = {};
     for (let k of answers) {
         if (k[0] !== "name" && k[0] !== "arity") {
             var result = {};
-            window.fuppy = k[1]
             for (let j of k[1]) {
                 var key = varNames[j[0] - 1];
-                if (key) {
+                if (key && key != "") {
                     var value = j[1];
                     result[key] = value;
                 }
             }
-            output.push(result);
+            var result_key = JSON.stringify(result)
+            result_set[result_key] = result;
         }
     }
-    return output;
+    return Object.values(result_set);
 }
 
 function public_ask(text) {
@@ -207,14 +212,15 @@ function public_perform(action_text) {
     }
 }
 
-function _HBFormatPassage(passageName, hash) {
+function _HBFormatPassage(passageName, hash, quotes=true) {
+    var quote = quotes ? '"' : '';
     for (var key in hash) {
-        passageName = passageName.replace(`\(${key}\)`, `"${hash[key]}"`);
+        passageName = passageName.replace(`\(${key}\)`, `${quote}${hash[key]}${quote}`);
     }
     return passageName;
 }
 
-Handlebars.registerHelper("q", function(query, options) {
+function query_helper (query, options) {
     var output = "";
     // Format provided variables
     query = _HBFormatPassage(query, options.hash);
@@ -227,6 +233,20 @@ Handlebars.registerHelper("q", function(query, options) {
         output += options.fn(answer);
     }
     return output;
+}
+Handlebars.registerHelper("q", query_helper);
+
+Handlebars.registerHelper("qif", function(query, options) {
+    options.hash.limit = 1;
+    return query_helper(query, options);
+})
+
+Handlebars.registerHelper("qlink", function(name, query, options) {
+    name = _HBFormatPassage(name, options.hash, false)
+    query = _HBFormatPassage(query, options.hash)
+    var output = `[[${name}|${query}]]`
+    console.log(output)
+    return output
 })
 
 Handlebars.registerHelper("assert", function(query, options) {
@@ -237,9 +257,24 @@ Handlebars.registerHelper("perform", function(query, options) {
     public_perform(_HBFormatPassage(query, options.hash));
 })
 
-
 Handlebars.registerHelper("retract", function(query, options) {
     public_retract(query);
+})
+
+Handlebars.registerHelper("qjoin", function(query, which, options) {
+    let joiner = options.hash.joiner || ", ";
+    let last = options.hash.last;
+
+    query = _HBFormatPassage(query, options.hash);
+    var answers = public_ask(query);
+    answers = answers.map((a) => a[which]);
+
+    if (last) {
+        answers = answers.slice(0,-2).concat(answers.slice(-2).join(last));
+    }
+
+    console.log(answers, answers.join(joiner))
+    return answers.join(joiner);
 })
 
 // TODO: This helper should live in story.js/passage.js/the level above

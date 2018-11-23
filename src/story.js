@@ -309,7 +309,7 @@ _.extend(Story.prototype, {
                 var passage = this.passages[i];
                 if (!passage) continue;
                 // Translate the regex to match values
-                var regex = passage.name.replace(/\((.*)\)/, `"(?<$1>[^"]*)"`);
+                var regex = passage.name.replace(/\(([^)]*)\)/g, `"(?<$1>[^"]*)"`);
                 var match = idOrName.match(`^${regex}$`);
                 if (match) {
                     return {
