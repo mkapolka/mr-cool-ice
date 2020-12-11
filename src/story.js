@@ -329,6 +329,30 @@ _.extend(Story.prototype, {
 		}
 	},
 
+    resolvePassage: async function(query, context) {
+        let hash = templating.hashName(query, context)
+        let tauQuery = `passage_db(Id, '${hash.key}', [${hash.vars.join(",")}]).`
+        let passageId = (await templating.queryMap(tauQuery, 1, d => d.Id))[0]
+        let passage = this.passage(passageId)
+
+        if (!passage) {
+            throw new Error(
+                'There is no passage that matches query "' + tauQuery + '"'
+            );
+        }
+
+        let outContext = {}
+        for (let i = 0; i < passage.hash.vars.length; i++) {
+            let key = passage.hash.vars[i]
+            outContext[key] = hash.vars[i]
+        }
+
+        return {
+            passage: passage,
+            context: outContext
+        }
+    },
+
 	/**
 	 Displays a passage on the page, replacing the current one. If there is no
 	 passage by the name or ID passed, an exception is raised.
@@ -344,25 +368,7 @@ _.extend(Story.prototype, {
 
 	show: function(idOrName, noHistory) {
         if (typeof idOrName === "string") {
-            let hash = templating.hashName(idOrName)
-            let query = `passage_db(Id, '${hash.key}', [${hash.vars.join(",")}]).`
-            templating.queryMap(query, 1, d => d.Id).then(([id]) => {
-                let passage = this.passage(id)
-
-                if (!passage) {
-                    throw new Error(
-                        'There is no passage with the ID or name "' + id + '"'
-                    );
-                }
-
-                let context = {}
-                for (let i = 0; i < passage.hash.vars.length; i++) {
-                    let key = passage.hash.vars[i]
-                    context[key] = hash.vars[i]
-                }
-
-                this.showPassage(passage, noHistory, context)
-            })
+            this.resolvePassage(idOrName).then(({passage, context}) => this.showPassage(passage, noHistory, context))
         } else { // number
             let passage = this.passage(idOrName)
             if (!passage) {

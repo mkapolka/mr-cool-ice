@@ -6,14 +6,15 @@ window.session = session
 let varRegexp = /\((\w+)\)|('.*')|(".*")/g
 
 // Return the name hash for a passage
-function hashName(name) {
+function hashName(name, context) {
+    context = context || {}
     let split = name.split(":-")
     let head = split[0].trim()
     let cond = split[1]
     let varMatches = head.matchAll(varRegexp);
     var vars = []
     for (let [_, a, b, c] of varMatches) {
-        vars.push(a || b || "'" + c.slice(1,c.length-1) + "'")
+        vars.push(context[a] || a || b || c.slice(1,c.length-1))
     }
 
     let hashKey = head.replace(varRegexp, "%")
@@ -94,6 +95,18 @@ function parse(body) {
             case "do":
                 context.body.push({
                     command: "do",
+                    query: line.split(" ").slice(1).join(" ")
+                })
+            break;
+            case "display":
+                context.body.push({
+                    command: "display",
+                    query: line.split(" ").slice(1).join(" ")
+                })
+            break;
+            case "display?":
+                context.body.push({
+                    command: "display?",
                     query: line.split(" ").slice(1).join(" ")
                 })
             break;
@@ -209,6 +222,18 @@ async function render(program, context) {
                 let query = `${ctx}, ${command.query}`
                 console.log("Doing", query)
                 console.log(await queryMap(query, undefined, a => a))
+            break;
+            case "display":
+                let {passage, context: displayContext} = await window.story.resolvePassage(command.query, context)
+                output += await renderText(passage.source, displayContext)
+            break;
+            case "display?":
+                try {
+                    let {passage, context: displayContext} = await window.story.resolvePassage(command.query, context)
+                    output += await renderText(passage.source, displayContext)
+                } catch (e) {
+                    console.warn(e)
+                }
             break;
         }
     }

@@ -22,7 +22,6 @@ var templating = require("./templating");
 async function render(source, context) {
 	/* See below for the definition of readyFunc. */
 
-    console.log(context)
     var result = await templating.render(source, context || {});
 
 	/*
