@@ -22,11 +22,7 @@ var templating = require("./templating");
 async function render(source) {
 	/* See below for the definition of readyFunc. */
 
-	//var result = _.template(source)({ s: window.story.state, $: readyFunc });
-
-    //var result = handlebars.compile(source)({s: window.story.state, $: readyFunc});
     var result = await templating.render(source);
-    console.log(result)
 
 	/*
 	Transform class, ID, hidden, and link shorthands in HTML tags.

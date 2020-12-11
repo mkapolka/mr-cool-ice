@@ -322,9 +322,6 @@ _.extend(Story.prototype, {
         if (typeof(idOrName) === "string") {
             let parts = idOrName.split(",")
             let query = parts.slice(0,parts.length - 1).join(", ")
-            console.log("Going to perform: " + query)
-            tau.perform(query + '.')
-            console.log(parts, query, parts[parts.length - 1])
             passage = this.passage(parts[parts.length - 1].trim());
         } else {
             passage = this.passage(idOrName);
@@ -398,7 +395,6 @@ _.extend(Story.prototype, {
 		window.passage = passage;
 		this.atCheckpoint = false;
         passage.render().then(html => this.$passageEl.html(html));
-		//this.$passageEl.html(passage.render());
 
 		/**
 		 Triggered after a passage has been shown onscreen, and is now

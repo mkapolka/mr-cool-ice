@@ -28,19 +28,6 @@ function command(line) {
     return null
 }
 
-console.log(parse(`
-asd
-qwer
-\\if hi(there)
-then do this thing
-
-\\else
-Do this toher thing
-\\end
-
-More lines at the end
-`))
-
 function parse(body) {
     let root = {command: "base", body: []}
     let stack = [root]
@@ -83,6 +70,12 @@ function parse(body) {
                 context = eachContext;
                 stack.push(context)
             break;
+            case "do":
+                context.body.push({
+                    command: "do",
+                    query: line.split(" ").slice(1).join(" ")
+                })
+            break;
             default:
                 context.body.push({
                     command: "print",
@@ -114,7 +107,6 @@ async function queryMap(query, limit, f) {
         while (!done) {
             await new Promise((resolve, reject) => session.answer({
                 success: answer => {
-                    console.log("got one")
                     output.push(f(answer))
                     resolve()
                 },
@@ -193,9 +185,11 @@ async function render(program, context) {
                     output += await render(command.elseBody)
                 }
             break;
+            case "do":
+                queryMap(command.query, undefined, () => {})
+            break;
         }
     }
-    console.log("Final output", output)
     return output
 }
 
