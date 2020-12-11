@@ -10,6 +10,7 @@ var _ = require('underscore');
 var marked = require('marked');
 var jQuery = require('jquery');
 var handlebars = require("handlebars");
+var templating = require("./templating");
 
 /**
  Our rendering engine. This is available externally as Passage.render(),
@@ -18,12 +19,14 @@ var handlebars = require("handlebars");
  @return HTML source
 **/
 
-function render(source) {
+async function render(source) {
 	/* See below for the definition of readyFunc. */
 
 	//var result = _.template(source)({ s: window.story.state, $: readyFunc });
 
-    var result = handlebars.compile(source)({s: window.story.state, $: readyFunc});
+    //var result = handlebars.compile(source)({s: window.story.state, $: readyFunc});
+    var result = await templating.render(source);
+    console.log(result)
 
 	/*
 	Transform class, ID, hidden, and link shorthands in HTML tags.

@@ -7,7 +7,7 @@ var Story = window.Story = require('./story');
 var Passage = window.Passage = require('./passage');
 /* eslint-enable no-unused-vars */
 
-$(function() {
+$(async function() {
 	window.story = new Story($('tw-storydata'));
-	window.story.start($('#main'));
+	await window.story.start($('#main'));
 });

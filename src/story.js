@@ -11,7 +11,7 @@ var $ = require('jquery');
 var _ = require('underscore');
 var LZString = require('lz-string');
 var Passage = require('./passage');
-var tau = require("./tau");
+var tau = require("./templating");
 
 var Story = function(dataEl) {
 	/* Set up basic properties. */
@@ -174,7 +174,7 @@ _.extend(Story.prototype, {
 	 @param {DOMElement} el Element to show content in
 	**/
 
-	start: function(el) {
+	start: async function(el) {
 		this.$el = $(el);
 
 		/* Create an element to show the passage. */
@@ -249,11 +249,23 @@ _.extend(Story.prototype, {
 			eval(script);
 		}, this);
 
-        this.passages.filter((p) => p.tags.indexOf("tau") !== -1).map(
-            (p) => {
-                tau.session.consult(p.source);
-            } 
+        let consultations = this.passages.filter((p) => p.tags.indexOf("tau") !== -1).map(
+            (p, idx) => {
+                return new Promise((s, f) => {
+                    tau.session.consult(p.source, {
+                        error: (e) => {
+                            console.error(e)
+                            f()
+                        },
+                        success: s
+                    })
+                })
+            }
         );
+
+        for (let p of consultations) {
+            await p
+        }
 
 		/**
 		 Triggered when the story is finished loading, and right before
@@ -306,7 +318,17 @@ _.extend(Story.prototype, {
 	**/
 
 	show: function(idOrName, noHistory) {
-		var passage = this.passage(idOrName);
+        let passage = undefined
+        if (typeof(idOrName) === "string") {
+            let parts = idOrName.split(",")
+            let query = parts.slice(0,parts.length - 1).join(", ")
+            console.log("Going to perform: " + query)
+            tau.perform(query + '.')
+            console.log(parts, query, parts[parts.length - 1])
+            passage = this.passage(parts[parts.length - 1].trim());
+        } else {
+            passage = this.passage(idOrName);
+        }
 
 		if (!passage) {
 			throw new Error(
@@ -375,7 +397,8 @@ _.extend(Story.prototype, {
 
 		window.passage = passage;
 		this.atCheckpoint = false;
-		this.$passageEl.html(passage.render());
+        passage.render().then(html => this.$passageEl.html(html));
+		//this.$passageEl.html(passage.render());
 
 		/**
 		 Triggered after a passage has been shown onscreen, and is now
