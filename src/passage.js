@@ -19,10 +19,11 @@ var templating = require("./templating");
  @return HTML source
 **/
 
-async function render(source) {
+async function render(source, context) {
 	/* See below for the definition of readyFunc. */
 
-    var result = await templating.render(source);
+    console.log(context)
+    var result = await templating.render(source, context || {});
 
 	/*
 	Transform class, ID, hidden, and link shorthands in HTML tags.
@@ -225,8 +226,8 @@ _.extend(Passage.prototype, {
 	 @return HTML source
 	**/
 
-	render: function() {
-		return render(_.unescape(this.source));
+	render: function(context) {
+		return render(_.unescape(this.source), context);
 	}
 });
 

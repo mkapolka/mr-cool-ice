@@ -11,7 +11,7 @@ var $ = require('jquery');
 var _ = require('underscore');
 var LZString = require('lz-string');
 var Passage = require('./passage');
-var tau = require("./templating");
+var templating = require("./templating");
 
 var Story = function(dataEl) {
 	/* Set up basic properties. */
@@ -177,6 +177,31 @@ _.extend(Story.prototype, {
 	start: async function(el) {
 		this.$el = $(el);
 
+        /* Build the passage db */
+        let hashes = [];
+
+        this.passages.forEach(function(passage, id) {
+            let hash = templating.hashName(passage.name)
+            hash.id = id
+            hashes.push(hash)
+            passage.hash = hash
+        });
+
+        let queries = hashes.map(hash => {
+            let line = `passage_db(${hash.id}, '${hash.key}', [${hash.vars.join(",")}])`
+            if (hash.cond) {
+                line = line + " :- " + hash.cond.replace(/\.$/, '')
+            }
+            line = line + "."
+            return line
+        }).join("\n")
+
+        await new Promise((accept, reject) => templating.session.consult(queries, {
+            success: accept,
+            error: reject
+        }))
+
+
 		/* Create an element to show the passage. */
 
 		this.$passageEl = $('<div class="passage" aria-live="polite"></div>');
@@ -252,7 +277,7 @@ _.extend(Story.prototype, {
         let consultations = this.passages.filter((p) => p.tags.indexOf("tau") !== -1).map(
             (p, idx) => {
                 return new Promise((s, f) => {
-                    tau.session.consult(p.source, {
+                    templating.session.consult(p.source, {
                         error: (e) => {
                             console.error(e)
                             f()
@@ -318,93 +343,110 @@ _.extend(Story.prototype, {
 	**/
 
 	show: function(idOrName, noHistory) {
-        let passage = undefined
-        if (typeof(idOrName) === "string") {
-            let parts = idOrName.split(",")
-            let query = parts.slice(0,parts.length - 1).join(", ")
-            passage = this.passage(parts[parts.length - 1].trim());
-        } else {
-            passage = this.passage(idOrName);
+        if (typeof idOrName === "string") {
+            let hash = templating.hashName(idOrName)
+            let query = `passage_db(Id, '${hash.key}', [${hash.vars.join(",")}]).`
+            templating.queryMap(query, 1, d => d.Id).then(([id]) => {
+                let passage = this.passage(id)
+
+                if (!passage) {
+                    throw new Error(
+                        'There is no passage with the ID or name "' + id + '"'
+                    );
+                }
+
+                let context = {}
+                for (let i = 0; i < passage.hash.vars.length; i++) {
+                    let key = passage.hash.vars[i]
+                    context[key] = hash.vars[i]
+                }
+
+                this.showPassage(passage, noHistory, context)
+            })
+        } else { // number
+            let passage = this.passage(idOrName)
+            if (!passage) {
+                throw new Error(
+                    'There is no passage with the ID or name "' + idOrName + '"'
+                );
+            }
+            this.showPassage(passage, noHistory)
+        }
+	},
+
+    showPassage: function(passage, noHistory, context) {
+        /**
+         Triggered whenever a passage is about to be replaced onscreen with
+         another. The passage being hidden is stored in the passage property of
+         the event.
+         @event hide.sm.passage
+        **/
+
+        this.$passageEl.trigger('hide.sm.passage', { passage: window.passage });
+
+        /**
+         Triggered whenever a passage is about to be shown onscreen. The passage
+         being displayed is stored in the passage property of the event.
+         @event showpassage
+        **/
+
+        this.$passageEl.trigger('show.sm.passage', { passage: passage });
+
+        if (!noHistory) {
+            this.history.push(passage.id);
+
+            try {
+                if (this.atCheckpoint) {
+                    window.history.pushState(
+                        {
+                            state: this.state,
+                            history: this.history,
+                            checkpointName: this.checkpointName
+                        },
+                        '',
+                        ''
+                    );
+
+                    $.event.trigger('added.sn.checkpoint', { name: name });
+                }
+                else {
+                    window.history.replaceState(
+                        {
+                            state: this.state,
+                            history: this.history,
+                            checkpointName: this.checkpointName
+                        },
+                        '',
+                        ''
+                    );
+                }
+            }
+            catch (e) {
+                /* This may fail due to security restrictions in the browser. */
+
+                /**
+                 Triggered whenever a checkpoint fails to be saved to browser
+                 history.
+                 @event fail.sm.checkpoint
+                **/
+
+                this.$el.trigger('fail.sm.checkpoint', { error: e });
+            }
         }
 
-		if (!passage) {
-			throw new Error(
-				'There is no passage with the ID or name "' + idOrName + '"'
-			);
-		}
+        window.passage = passage;
+        this.atCheckpoint = false;
+        passage.render(context).then(html => this.$passageEl.html(html));
 
-		/**
-		 Triggered whenever a passage is about to be replaced onscreen with
-		 another. The passage being hidden is stored in the passage property of
-		 the event.
-		 @event hide.sm.passage
-		**/
+        /**
+         Triggered after a passage has been shown onscreen, and is now
+         displayed in the story's element The passage being displayed is
+         stored in the passage property of the event.
+         @event shown.sm.passage
+        **/
 
-		this.$passageEl.trigger('hide.sm.passage', { passage: window.passage });
-
-		/**
-		 Triggered whenever a passage is about to be shown onscreen. The passage
-		 being displayed is stored in the passage property of the event.
-		 @event showpassage
-		**/
-
-		this.$passageEl.trigger('show.sm.passage', { passage: passage });
-
-		if (!noHistory) {
-			this.history.push(passage.id);
-
-			try {
-				if (this.atCheckpoint) {
-					window.history.pushState(
-						{
-							state: this.state,
-							history: this.history,
-							checkpointName: this.checkpointName
-						},
-						'',
-						''
-					);
-
-					$.event.trigger('added.sn.checkpoint', { name: name });
-				}
-				else {
-					window.history.replaceState(
-						{
-							state: this.state,
-							history: this.history,
-							checkpointName: this.checkpointName
-						},
-						'',
-						''
-					);
-				}
-			}
-			catch (e) {
-				/* This may fail due to security restrictions in the browser. */
-
-				/**
-				 Triggered whenever a checkpoint fails to be saved to browser
-				 history.
-				 @event fail.sm.checkpoint
-				**/
-
-				this.$el.trigger('fail.sm.checkpoint', { error: e });
-			}
-		}
-
-		window.passage = passage;
-		this.atCheckpoint = false;
-        passage.render().then(html => this.$passageEl.html(html));
-
-		/**
-		 Triggered after a passage has been shown onscreen, and is now
-		 displayed in the story's element The passage being displayed is
-		 stored in the passage property of the event.
-		 @event shown.sm.passage
-		**/
-
-		this.$passageEl.trigger('shown.sm.passage', { passage: passage });
-	},
+        this.$passageEl.trigger('shown.sm.passage', { passage: passage });
+    },
 
 	/**
 	 Returns the HTML source for a passage. This is most often used when

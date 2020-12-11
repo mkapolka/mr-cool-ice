@@ -3,6 +3,27 @@ var pl = require("tau-prolog");
 var session = session || pl.create();
 window.session = session
 
+let varRegexp = /\((\w+)\)|('.*')|(".*")/g
+
+// Return the name hash for a passage
+function hashName(name) {
+    let split = name.split(":-")
+    let head = split[0].trim()
+    let cond = split[1]
+    let varMatches = head.matchAll(varRegexp);
+    var vars = []
+    for (let [_, a, b, c] of varMatches) {
+        vars.push(a || b || "'" + c.slice(1,c.length-1) + "'")
+    }
+
+    let hashKey = head.replace(varRegexp, "%")
+    return {
+        key: hashKey,
+        vars: vars,
+        cond: cond
+    }
+}
+
 function subToDict(substitution) {
     var output = {};
     var vars = substitution.domain();
@@ -107,7 +128,7 @@ async function queryMap(query, limit, f) {
         while (!done) {
             await new Promise((resolve, reject) => session.answer({
                 success: answer => {
-                    output.push(f(answer))
+                    output.push(f(subToDict(answer)))
                     resolve()
                 },
                 limit: () => reject("Query exceeded limit: " + query),
@@ -140,9 +161,7 @@ function subToDict(substitution) {
 }
 
 async function queryContexts(query, limit) {
-    return queryMap(query, limit, answer => {
-        return subToDict(answer)
-    })
+    return queryMap(query, limit, answer => answer)
 }
 
 function mergeContexts(a, b) {
@@ -186,18 +205,23 @@ async function render(program, context) {
                 }
             break;
             case "do":
-                queryMap(command.query, undefined, () => {})
+                let ctx = Object.keys(context).map(k => `${k} = ${context[k]}`).join(", ")
+                let query = `${ctx}, ${command.query}`
+                console.log("Doing", query)
+                console.log(await queryMap(query, undefined, a => a))
             break;
         }
     }
     return output
 }
 
-async function renderText(body) {
-    return render(parse(body))
+async function renderText(body, context) {
+    return render(parse(body), context)
 }
 
 module.exports = {
     render: renderText,
-    session: session
+    session: session,
+    queryMap: queryMap,
+    hashName: hashName
 }
