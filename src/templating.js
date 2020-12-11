@@ -73,6 +73,16 @@ function parse(body) {
                 stack.pop()
                 context = stack[stack.length - 1]
             break;
+            case "each":
+                let eachContext = {
+                    command: "each",
+                    query: line.split(" ").slice(1).join(" "),
+                    body: [],
+                }
+                context.body.push(eachContext);
+                context = eachContext;
+                stack.push(context)
+            break;
             default:
                 context.body.push({
                     command: "print",
@@ -112,7 +122,6 @@ async function queryMap(query, limit, f) {
                 error: err => reject("Error: " + err),
                 fail: () => {
                     done = true
-                    console.log("donezo")
                     resolve(output.slice(0, limit))
                 }
             }))
@@ -165,10 +174,21 @@ async function render(program, context) {
                 output += renderLine(context, command.text) + "\n"
             break;
             case "if":
-                let qq = await queryContexts(command.query, 1);
-                if (qq.length > 0) {
-                    let newContext = mergeContexts(context, qq[0]);
+                let ifQuery = await queryContexts(command.query, 1);
+                if (ifQuery.length > 0) {
+                    let newContext = mergeContexts(context, ifQuery[0]);
                     output += await render(command.body, newContext)
+                } else if (command.elseBody) {
+                    output += await render(command.elseBody)
+                }
+            break;
+            case "each":
+                let eachQuery = await queryContexts(command.query);
+                if (eachQuery.length > 0) {
+                    for (let queryResult of eachQuery) {
+                        let newContext = mergeContexts(context, queryResult);
+                        output += await render(command.body, newContext)
+                    }
                 } else if (command.elseBody) {
                     output += await render(command.elseBody)
                 }

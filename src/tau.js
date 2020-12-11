@@ -15,7 +15,6 @@ function subToDict(substitution) {
             jsValue = jsValue.replace(/\\n/g, '\n')
         }
         output[strings[i]] = jsValue
-
     }
     return output;
 }
@@ -42,7 +41,6 @@ async function qmap(query, limit, f) {
 
     let output = []
 
-    console.log("hey")
     let p = new Promise((resolve, reject) => {
         let output = []
         session.answer({
